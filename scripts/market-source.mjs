@@ -22,3 +22,28 @@ export function nasdaqDates(body){
  const usDate=s=>{const m=String(s||'').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);return m?`${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`:null;};
  return new Map((body?.data?.dividends?.rows||[]).map(r=>[usDate(r.exOrEffDate),usDate(r.paymentDate)]).filter(([ex,pay])=>ex&&pay));
 }
+
+export function directorySymbols(text){
+ const lines=text.trim().split(/\r?\n/),headers=lines.shift().split('|');
+ const index=names=>names.map(n=>headers.indexOf(n)).find(n=>n>=0);
+ const symbolIndex=index(['NASDAQ Symbol','Symbol','ACT Symbol']),nameIndex=index(['Security Name']),testIndex=index(['Test Issue']);
+ if(symbolIndex===undefined)throw new Error('Unrecognised public symbol directory.');
+ return lines.map(line=>line.split('|')).filter(row=>(testIndex===undefined||row[testIndex]==='N')&&/^[A-Z][A-Z0-9.-]{0,14}$/.test(row[symbolIndex]||'')).map(row=>({symbol:row[symbolIndex].replaceAll('.','-'),name:row[nameIndex]||row[symbolIndex],sector:'US-listed security'}));
+}
+export function sparkRecords(body,previous={},now=new Date()){
+ if(!Array.isArray(body?.spark?.result))throw new Error('Bulk quote source returned no results.');
+ return body.spark.result.flatMap(item=>{
+  const result=item.response?.[0],meta=result?.meta;
+  if(!meta||!finite(meta.regularMarketPrice)||!finite(meta.regularMarketTime)||meta.symbol!==item.symbol)return [];
+  return [{...previous[item.symbol],symbol:item.symbol,currency:meta.currency,price:Number(meta.regularMarketPrice),priceDate:iso(meta.regularMarketTime),quoteTime:new Date(meta.regularMarketTime*1000).toISOString(),fetchedAt:now.toISOString(),source:'Yahoo Finance (public chart)',prices:previous[item.symbol]?.prices||[],dividends:previous[item.symbol]?.dividends||[],splits:previous[item.symbol]?.splits||[],historyReady:previous[item.symbol]?.historyReady===true}];
+ });
+}
+export function publicRecord(record){
+ const wanted=new Set();
+ for(const dividend of record.dividends||[]){
+  const target=dividend.payDate||dividend.exDate;
+  const points=(record.prices||[]).filter(p=>p.date<=target&&Date.parse(target)-Date.parse(p.date)<=7*86400000);
+  if(points.length)wanted.add(points.at(-1).date);
+ }
+ return {...record,prices:(record.prices||[]).filter(p=>wanted.has(p.date))};
+}

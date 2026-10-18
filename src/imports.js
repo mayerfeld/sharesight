@@ -1,5 +1,6 @@
 import Papa from 'papaparse';
 import {validateHolding} from './portfolio.js';
+import {cleanMarket} from './market.js';
 export const CSV_COLUMNS = ['id','date','action','symbol','name','quantity','price','fees','amount','currency','account','source'];
 const aliases = {
   date:['date','trade date','transaction date','run date','transaction trade date','transactiondate'],
@@ -8,7 +9,7 @@ const aliases = {
   name:['name','description','security description','investment name','security name'],
   quantity:['quantity','qty','shares','units','number of shares','quantity shares','numberofshares'],
   price:['price','price per share','price $','share price','unit price','price per unit','price aud','price usd','pricepershare'],
-  fees:['fees','commission','commission $','commissions','commission fees','brokerage','brokerage fees','transaction fees','brokerage $'],
+  fees:['fees','commission','commission $','commissions','commission fees','commissions and fees','brokerage','brokerage fees','transaction fees','brokerage $'],
   amount:['amount','amount $','net amount','net amount $','net cash','total','total amount','proceeds','net proceeds','netamount','value'],
   currency:['currency','currency code','instrument currency'], feeCurrency:['brokerage currency'], account:['account','account number','account name','portfolio','portfolio name'],
   id:['id','transaction id','transactionid','trade id','reference number','confirmation number'], source:['source','broker']
@@ -80,7 +81,7 @@ export function parseImport(text,{source='Auto-detect',currency='USD',account='D
       }else{
         const action=actionType(get('action'));
         const quantity=Math.abs(numeric(get('quantity')));
-        const feeColumns=headers.map((h,j)=>/^(fees|commission|commission \$|commissions|commission fees|brokerage|brokerage fees|brokerage \$|transaction fees|fees \$)$/.test(h)?j:-1).filter(j=>j>=0);
+        const feeColumns=headers.map((h,j)=>/^(fees|commission|commission \$|commissions|commission fees|commissions and fees|brokerage|brokerage fees|brokerage \$|transaction fees|fees \$)$/.test(h)?j:-1).filter(j=>j>=0);
         const fees=feeColumns.reduce((sum,j)=>sum+Math.abs(numeric(cells[j])),0);
         const amount=Math.abs(numeric(get('amount')));
         const tradeCurrency=String(get('currency')||currency).trim().toUpperCase();
@@ -122,14 +123,14 @@ export function calculateLedger(trades,prices={},currency='USD') {
   const dividendPool=new Map();
   const dividendKey=t=>JSON.stringify([t.account,t.symbol,t.date,t.currency]);
   for(const t of trades)if(t.action==='DIVIDEND'){const k=dividendKey(t);dividendPool.set(k,(dividendPool.get(k)||0)+t.amount);}
-  const sorted=trades.map((t,index)=>({...t,index})).sort((a,b)=>a.date.localeCompare(b.date)||a.index-b.index);
+  const sorted=trades.map((t,index)=>({...t,index})).sort((a,b)=>a.date.localeCompare(b.date)||(a.action==='SPLIT'?-1:b.action==='SPLIT'?1:0)||a.index-b.index);
   for(const t of sorted){
     if(t.currency!==currency){issues.push(`${t.symbol}: ${t.currency} differs from reporting currency ${currency}.`);continue;}
     const k=JSON.stringify([t.account,t.symbol]);
     const p=positions.get(k)||{symbol:t.symbol,name:t.name,sector:'Imported securities',account:t.account,quantity:0,basis:0,dividends:0,lastPrice:0,realised:0};
-    if(t.action==='BUY'||t.action==='REINVEST'){
+    if(t.action==='SPLIT'){p.quantity*=t.ratio;}else if(t.action==='BUY'||t.action==='REINVEST'){
       p.quantity+=t.quantity;p.basis+=t.quantity*t.price+t.fees;p.lastPrice=t.price;
-      if(t.action==='REINVEST'){
+      if(t.action==='REINVEST'&&t.countIncome!==false){
         const amount=t.amount||t.quantity*t.price+t.fees,k=dividendKey(t),available=dividendPool.get(k)||0;
         const matched=Math.min(available,amount);dividendPool.set(k,Math.max(0,available-matched));p.dividends+=amount-matched;
       }
@@ -149,5 +150,5 @@ export function readBackup(text){
   const d=b.data;
   if(!['USD','AUD','GBP','EUR'].includes(d.currency)||!Array.isArray(d.holdings)||!Array.isArray(d.trades))throw new Error('Invalid backup contents.');
   const prices=Object.create(null);for(const [symbol,p] of Object.entries(d.prices||{})){if(!Number.isFinite(p)||p<0)throw new Error('Invalid saved price.');prices[symbol]=p;}
-  return {currency:d.currency,holdings:d.holdings.map(validateHolding),trades:d.trades.map(validateTrade),prices,demo:!!d.demo};
+  return {currency:d.currency,holdings:d.holdings.map(validateHolding),trades:d.trades.map(validateTrade),prices,demo:!!d.demo,...(d.market?{market:cleanMarket(d.market)}:{})};
 }

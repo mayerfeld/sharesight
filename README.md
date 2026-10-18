@@ -1,6 +1,6 @@
 # Portfolio Desk
 
-A local Windows desktop portfolio tracker inspired by portfolio reporting tools. Built with Electron and React. This project is independent of Sharesight and the named brokers.
+A browser and Windows portfolio tracker inspired by portfolio reporting tools. Built with Electron and React. This project is independent of Sharesight and the named brokers.
 
 ## Use in a browser
 
@@ -42,12 +42,28 @@ Build a portable executable with `npm run dist:portable` (runs without installin
 The first launch shows clearly marked illustrative USD holdings. Select **Start my portfolio**, add holdings manually, or select **Import data** to import broker transaction history.
 
 - **Overview:** market value, unrealised gain, dividends, realised average-cost gain for imported trades, and asset allocation.
-- **Holdings:** search positions and update current prices using the pencil. Imported holdings initially use their last trade price; prices do not update automatically.
+- **Holdings:** automatic scheduled quotes where supported, with quote dates and stale-data labels. The pencil sets a manual override; Use automatic quote restores the feed for that security.
 - **Transactions:** review all imported trades and export a portable trade CSV.
 - **Reports:** holdings report and Print / save PDF.
-- **Full backup / Restore backup:** export and restore the complete dataset, including transactions, manual holdings, prices, currency and settings.
+- **Full backup / Restore backup:** export/restore the selected portfolio. **Back up all portfolios** exports the entire workspace. Restoring an all-portfolios backup replaces the workspace after confirmation.
 
 Data is stored locally in the desktop application's profile. Browser development mode has its own separate local storage. Backups contain financial information in plain text; keep them somewhere private. Back up before reinstalling, replacing a portfolio, or changing import sources.
+
+## Multiple portfolios
+
+Use the portfolio selector in the sidebar (or the top selector on mobile) to switch portfolios. **New** creates an empty named portfolio; the pencil renames it. Deleting a portfolio requires confirmation and keeps the others. The last portfolio cannot be deleted; reset it instead. Existing single-portfolio data migrates locally on the first save; the original storage entry is retained for recovery. Portfolios have separate holdings, trades, currency, quote overrides, cached market data, and reinvestment settings. They are local to the browser/profile and do not sync between devices.
+
+## Automatic quotes, dividends and assumed reinvestment
+
+No API key is needed. The Browser app GitHub workflow refreshes a public Yahoo Finance market feed on deployment and on a weekday half-hour schedule during the US trading window. Nasdaq public data adds dividend payment dates where available. GitHub schedules and public providers are best effort: quotes are scheduled and may be delayed, stale, rate-limited or unavailable. Source quote timestamps are displayed; failures retain cached/manual/imported prices instead of substituting zero. No actual broker trades are placed.
+
+The feed builds a general US listing catalog from Nasdaq Trader's Nasdaq and other-exchange directories, including US stocks and ETFs. Common ETFs, S&P 500 stocks and a broad marine-transportation group (including TRMD and DHT) get priority dividend/history refreshes. Bulk quotes cover the listing catalog; additional historical dividend coverage rotates in batches. A ticker may have a quote while dividend history is still pending; the app warns that income totals are incomplete. Provider coverage is not guaranteed for every security, preferred share, derivative, foreign listing or delisted ticker. Quotes are applied only when the quote currency matches the portfolio currency. User account data and holdings are never sent to GitHub or added to the public catalog; public categories define the feed. Production feed files and caches are ignored by Git.
+
+Automatic income uses shares held **before the ex-dividend date**. Assume dividends are reinvested is enabled by default. Estimates compound fractional units using a historical payment-date closing price; if payment dates are unavailable, they use the ex-date close and are explicitly marked as estimates. When a recent prior close is used, it is an approximation. Missing historical prices recognise estimated cash income without inventing reinvested units. Imported broker dividends and reinvestments take precedence over generated estimates. Generated estimates stay separate from the imported transaction ledger; importing actual history recalculates the estimates. They exclude withholding taxes, fees, broker price averaging and DRIP rounding. Dividend amounts and resulting units are therefore not broker-confirmed balances.
+
+Public split events adjust holdings and preserve cost basis. The collector restores Yahoo split-adjusted historical prices/dividends to contemporaneous values before the position replay. Coverage depends on the available public history (initially up to ten years). Corporate actions other than ordinary splits remain unsupported. Snapshot portfolios without dated trades can receive quotes but cannot establish historical dividend eligibility.
+
+Run `npm run market:refresh` in a network environment that permits Yahoo Finance, Nasdaq, Nasdaq Trader and the public S&P 500 listing source. It writes ignored `public/market/` feed files and `.market-cache/`. The Actions workflow caches prior data and publishes the feed with the app. If all sources fail, the refresh command exits nonzero; deployment can still publish the app, which visibly reports missing quotes. A successful app deployment alone is not proof a particular ticker has valid market data. Local tests use clearly synthetic provider payloads; tests never commit uploaded financial files.
 
 ## Repeated imports and portability
 
@@ -75,9 +91,9 @@ Snapshot holdings CSV is also supported using `symbol,name,sector,quantity,cost,
 
 These mappings are tested using synthetic fixtures, not your actual broker files. Brokers have multiple export layouts. Unrecognised formats produce errors for review rather than an automatic successful import. CSV and Excel preambles, quoted descriptions, signed numbers, and selectable date order are handled. Excel numeric dates are interpreted using the workbook’s date system. `.xls` and `.xlsx` imports are read locally, including older HTML/XML exports saved as `.xls`; formulas and macros are never executed. Formula cells must contain saved values, and password-protected workbooks must first be saved as an unprotected copy. The 10 MB file limit also applies to Excel; individual worksheets are limited to 50,000 rows, 256 columns, and 1,000,000 cells. Select one worksheet per import. Sharesight All trades reports are supported, including date-formatted text cells, `Qty`, instrument currency, and report total rows. Use the `Combined` worksheet to include all trades; the grouping worksheets contain subsets of the same data. Sheets use the same broker column mappings and duplicate checks as CSV. Download a trade template in the importer for the canonical format.
 
-Supported actions: buys, sales, dividends and reinvestments. For reinvestments, a separate same-date dividend for the same account/security is matched against reinvested income to avoid counting it twice. If broker dividend and reinvestment dates differ, reconcile these before import. Unsupported cash transactions, options, shorts, transfers, corporate actions, cancellations, capital-gain distributions and returns of capital require reconciliation outside this version. Only include supported equity, fund and ETF transactions. Import full purchase history before sales; same-date rows retain their file order.
+Supported actions: buys, sales, dividends and reinvestments. For reinvestments, a separate same-date dividend for the same account/security is matched against reinvested income to avoid counting it twice. If broker dividend and reinvestment dates differ, reconcile these before import. Unsupported cash transactions, options, shorts, transfers, non-split corporate actions, cancellations, capital-gain distributions and returns of capital require reconciliation outside this version. Only include supported equity, fund and ETF transactions. Import full purchase history before sales; same-date rows retain their file order.
 
-All amounts must already be in the reporting currency (USD by default); there is no FX conversion. Realised gains use average cost including fees, not tax lots/FIFO, and are **not tax reports**. Cash balances, deposits/withdrawals, historical charts, annualised and money-weighted performance, live market data, brokerage connections and automatic app updates are not implemented.
+All amounts must already be in the reporting currency (USD by default); there is no FX conversion. Realised gains use average cost including fees, not tax lots/FIFO, and are **not tax reports**. Cash balances, deposits/withdrawals, historical charts, annualised and money-weighted performance, brokerage connections and streaming real-time data are not implemented. Browser app updates preserve saved portfolios.
 
 ## Develop and test
 
