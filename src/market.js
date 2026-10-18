@@ -7,7 +7,7 @@ export function cleanMarket(value){
  for(const [symbol,r] of Object.entries(value?.records||{})){
   if(!/^[A-Z0-9.-]{1,25}$/.test(symbol)||!['USD','AUD','GBP','EUR'].includes(r?.currency))continue;
   try{
-   const record={symbol,currency:r.currency,source:'Yahoo Finance (public chart)',historyReady:r.historyReady===true,historyFetchedAt:r.historyFetchedAt||null,sector:String(r.sector||'Imported securities'),prices:(r.prices||[]).map(p=>({date:day(p.date),close:Number(p.close)})).filter(p=>positive(p.close)),dividends:(r.dividends||[]).map(d=>({exDate:day(d.exDate),payDate:d.payDate?day(d.payDate):null,amount:Number(d.amount)})).filter(d=>positive(d.amount)),splits:(r.splits||[]).map(s=>({date:day(s.date),ratio:Number(s.ratio)})).filter(s=>positive(s.ratio))};
+   const record={symbol,currency:r.currency,source:'Yahoo Finance (public chart)',historyReady:r.historyReady===true,historyFetchedAt:r.historyFetchedAt||null,sector:String(r.sector||'Imported securities'),history:(r.history||[]).filter(p=>Array.isArray(p)&&p.length===2&&positive(p[1])).map(([d,v])=>[day(d),Number(v)]),prices:(r.prices||[]).map(p=>({date:day(p.date),close:Number(p.close)})).filter(p=>positive(p.close)),dividends:(r.dividends||[]).map(d=>({exDate:day(d.exDate),payDate:d.payDate?day(d.payDate):null,amount:Number(d.amount)})).filter(d=>positive(d.amount)),splits:(r.splits||[]).map(s=>({date:day(s.date),ratio:Number(s.ratio)})).filter(s=>positive(s.ratio))};
    if(positive(r.price)){record.price=Number(r.price);record.priceDate=day(r.priceDate);}
    for(const field of ['fetchedAt','quoteTime'])if(Number.isFinite(Date.parse(r[field])))record[field]=r[field];
    market.records[symbol]=record;

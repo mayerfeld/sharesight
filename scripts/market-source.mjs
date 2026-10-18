@@ -45,5 +45,5 @@ export function publicRecord(record){
   const points=(record.prices||[]).filter(p=>p.date<=target&&Date.parse(target)-Date.parse(p.date)<=7*86400000);
   if(points.length)wanted.add(points.at(-1).date);
  }
- return {...record,prices:(record.prices||[]).filter(p=>wanted.has(p.date))};
+ return {...record,prices:(record.prices||[]).filter(p=>wanted.has(p.date)),history:(record.prices||[]).map(p=>[p.date,p.close])};
 }

@@ -7,7 +7,7 @@ const headers={'User-Agent':'Mozilla/5.0 (compatible; PortfolioDesk market refre
 async function get(url){const r=await fetch(url,{headers,signal:AbortSignal.timeout(25000)});if(!r.ok)throw new Error(`HTTP ${r.status}`);return r;}
 const commonETFs=['VTI','VXUS','BND','SPY','QQQ','VT','VOO','IWM','SCHD','VIG','VEA','VWO','AGG','GLD','TLT','ARKK'];
 // Public market categories, never imported account data or portfolio quantities.
-const shipping=['TRMD','DHT','FRO','STNG','TNK','INSW','ECO','ASC','DAC','ZIM','SBLK','GNK','SB','NAT','NMM','CMRE','GLNG','GSL','DSX','PANL','TK','SFL'];
+const shipping=['TRMD','DHT','FRO','STNG','TNK','INSW','ECO','ASC','DAC','ZIM','SBLK','GNK','SB','NAT','NMM','CMRE','GLNG','GSL','DSX','PANL','TK','SFL','BWLP','GASS','HAFN','LPG'];
 const universe=new Map([...commonETFs.map(symbol=>({symbol,sector:'ETF',priority:true})),...shipping.map(symbol=>({symbol,sector:'Marine transportation',priority:true}))].map(item=>[item.symbol,item]));
 try{
  const csv=await (await get('https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv')).text();

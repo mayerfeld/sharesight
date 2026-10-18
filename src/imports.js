@@ -121,27 +121,31 @@ export function mergeTrades(existing,incoming){
 export function calculateLedger(trades,prices={},currency='USD') {
   const positions=new Map();let realised=0;const issues=[];
   const dividendPool=new Map();
-  const dividendKey=t=>JSON.stringify([t.account,t.symbol,t.date,t.currency]);
-  for(const t of trades)if(t.action==='DIVIDEND'){const k=dividendKey(t);dividendPool.set(k,(dividendPool.get(k)||0)+t.amount);}
+  const dividendKey=t=>JSON.stringify([t.account,t.symbol,t.currency]);
+  for(const t of trades)if(t.action==='DIVIDEND'){const k=dividendKey(t);const entries=dividendPool.get(k)||[];entries.push({date:t.date,left:t.amount});dividendPool.set(k,entries);}
   const sorted=trades.map((t,index)=>({...t,index})).sort((a,b)=>a.date.localeCompare(b.date)||(a.action==='SPLIT'?-1:b.action==='SPLIT'?1:0)||a.index-b.index);
   for(const t of sorted){
     if(t.currency!==currency){issues.push(`${t.symbol}: ${t.currency} differs from reporting currency ${currency}.`);continue;}
     const k=JSON.stringify([t.account,t.symbol]);
-    const p=positions.get(k)||{symbol:t.symbol,name:t.name,sector:'Imported securities',account:t.account,quantity:0,basis:0,dividends:0,lastPrice:0,realised:0};
-    if(t.action==='SPLIT'){p.quantity*=t.ratio;}else if(t.action==='BUY'||t.action==='REINVEST'){
+    const p=positions.get(k)||{symbol:t.symbol,name:t.name,sector:'Imported securities',account:t.account,quantity:0,basis:0,dividends:0,lastPrice:0,realised:0,boughtUnits:0,reinvestedUnits:0,soldUnits:0,cashPurchases:0,reinvestedCost:0};
+    if(t.action==='SPLIT'){p.quantity*=t.ratio;p.boughtUnits*=t.ratio;p.reinvestedUnits*=t.ratio;p.soldUnits*=t.ratio;p.lastPrice/=t.ratio;}else if(t.action==='BUY'||t.action==='REINVEST'){
+      if(t.action==='BUY'){p.boughtUnits+=t.quantity;p.cashPurchases+=t.quantity*t.price+t.fees;}else{p.reinvestedUnits+=t.quantity;p.reinvestedCost+=t.quantity*t.price+t.fees;}
       p.quantity+=t.quantity;p.basis+=t.quantity*t.price+t.fees;p.lastPrice=t.price;
       if(t.action==='REINVEST'&&t.countIncome!==false){
-        const amount=t.amount||t.quantity*t.price+t.fees,k=dividendKey(t),available=dividendPool.get(k)||0;
-        const matched=Math.min(available,amount);dividendPool.set(k,Math.max(0,available-matched));p.dividends+=amount-matched;
+        let unmatched=t.amount||t.quantity*t.price+t.fees;
+        const entries=(dividendPool.get(dividendKey(t))||[]).filter(d=>d.left>0&&Math.abs(Date.parse(d.date)-Date.parse(t.date))<=7*86400000).sort((a,b)=>Math.abs(Date.parse(a.date)-Date.parse(t.date))-Math.abs(Date.parse(b.date)-Date.parse(t.date)));
+        for(const d of entries){const matched=Math.min(d.left,unmatched);d.left-=matched;unmatched-=matched;if(unmatched<=1e-8)break;}
+        p.dividends+=unmatched;
       }
     }else if(t.action==='SELL'){
       if(t.quantity>p.quantity+1e-8){issues.push(`${t.date} ${t.symbol}: sale exceeds available units in ${t.account}. Import earlier purchases first.`);continue;}
+      p.soldUnits+=t.quantity;
       const removed=p.quantity?p.basis*t.quantity/p.quantity:0;
       const gain=t.quantity*t.price-t.fees-removed;p.realised+=gain;realised+=gain;p.basis=Math.max(0,p.basis-removed);p.quantity=Math.max(0,p.quantity-t.quantity);p.lastPrice=t.price;
     }else if(t.action==='DIVIDEND')p.dividends+=t.amount;
     positions.set(k,p);
   }
-  const holdings=[...positions.values()].filter(p=>p.quantity>1e-8).map(p=>({symbol:p.symbol,name:p.name,sector:p.sector,quantity:p.quantity,cost:p.basis/p.quantity,price:prices[p.symbol]??p.lastPrice,dividends:p.dividends,account:p.account}));
+  const holdings=[...positions.values()].filter(p=>p.quantity>1e-8).map(p=>({symbol:p.symbol,name:p.name,sector:p.sector,quantity:p.quantity,cost:p.basis/p.quantity,price:prices[p.symbol]??p.lastPrice,dividends:p.dividends,account:p.account,boughtUnits:p.boughtUnits,reinvestedUnits:p.reinvestedUnits,soldUnits:p.soldUnits,cashPurchases:p.cashPurchases,reinvestedCost:p.reinvestedCost,realisedGain:p.realised}));
   return {holdings,realised,dividends:[...positions.values()].reduce((s,p)=>s+p.dividends,0),issues};
 }
 export function readBackup(text){

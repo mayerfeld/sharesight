@@ -3,7 +3,8 @@ import {providerSymbol} from './market.js';
 const DAY=86400000;
 const positionKey=(account,symbol)=>JSON.stringify([account,symbol]);
 const cleanDay=day=>parseDate(day);
-export function estimateIncome(trades,market,today=new Date().toISOString().slice(0,10)) {
+export function portfolioToday(now=new Date()){const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now).map(p=>[p.type,p.value]));return `${parts.year}-${parts.month}-${parts.day}`;}
+export function estimateIncome(trades,market,today=portfolioToday()) {
   today=cleanDay(today);
   const records=market?.records||{},reinvest=market?.reinvest!==false;
   const synthetic=[],events=[],issues=[];
@@ -60,7 +61,9 @@ export function valuedPortfolio(data,today) {
   const active=data.market?.enabled!==false;
   const prices={...data.prices};
   if(active)for(const h of [...(data.holdings||[]),...(data.trades||[])]){const r=data.market?.records?.[providerSymbol(h.symbol)];if(!data.market?.manualPrices?.[h.symbol]&&r?.currency===data.currency&&Number.isFinite(r.price)&&r.price>0)prices[h.symbol]=r.price;}
-  const projection=active?estimateIncome(data.trades||[],data.market,today):{trades:data.trades||[],synthetic:[],events:[],issues:[]};
+  const asOf=today||portfolioToday();
+  const datedTrades=(data.trades||[]).filter(t=>t.date<=asOf);
+  const projection=active?estimateIncome(datedTrades,data.market,asOf):{trades:datedTrades,synthetic:[],events:[],issues:[]};
   const ledger=calculateLedger(projection.trades,prices,data.currency);
   const holdings=(data.trades||[]).length?ledger.holdings:(data.holdings||[]).map(h=>({...h,price:prices[h.symbol]??h.price}));
   for(const h of holdings){const record=data.market?.records?.[providerSymbol(h.symbol)];if(active&&record?.sector)h.sector=record.sector;}
