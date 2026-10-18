@@ -2,6 +2,30 @@
 
 A local Windows desktop portfolio tracker inspired by portfolio reporting tools. Built with Electron and React. This project is independent of Sharesight and the named brokers.
 
+## Use in a browser
+
+No installation is required. Open the hosted site in a current Chrome, Edge, Firefox or Safari browser. CSV imports, reports, exports and backup/restore run entirely in the browser; no brokerage credentials or backend server are needed.
+
+The browser and Windows versions use separate local storage. To move a portfolio, select **Full backup** in the old app, then **Restore backup** in the new one. Browsers do not automatically sync portfolios between devices. Clearing site data, private browsing, or removing a browser profile can remove local holdings; keep backups outside the browser.
+
+After the first successful visit over HTTPS, the app caches its shell for offline use. Chrome and Edge may offer an optional **Install app** button for a shortcut and a standalone window; this is optional. New versions show **Update app**, which reloads the app after you save open edits. Saved portfolio data remains in local storage.
+
+### Host with GitHub Pages
+
+The **Browser app** GitHub Actions workflow tests and builds on pushes to `main`, then deploys `dist/` to Pages. In the repository's **Settings → Pages → Build and deployment**, set **Source** to **GitHub Actions** once. If deployment ran before Pages was enabled, rerun the Browser app workflow from the Actions tab. Use the website URL reported by the successful deployment; for this repository the expected address is `https://mayerfeld.github.io/sharesight/`.
+
+Pages serves the app publicly; financial data remains in your browser and is never part of a deployment. Repository plan/visibility restrictions can affect Pages availability. Other static HTTPS hosting also works: upload the contents of `dist/` with `index.html` at the site's root or chosen subdirectory. Do not open `dist/index.html` directly from disk in a browser; use a web server.
+
+For a local browser build:
+
+```sh
+ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci
+npm run build
+npm run preview
+```
+
+Offline caching requires HTTPS or a trusted local development origin and is enabled only in production builds. Development uses `npm run dev`.
+
 ## Use on Windows
 
 Requires Windows 10/11 x64. Install Node.js 24 LTS, open a terminal in this folder, then:

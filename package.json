@@ -13,7 +13,8 @@
     "test": "node --test",
     "desktop": "npm run build && electron .",
     "dist:win": "npm run build && electron-builder --win nsis --x64",
-    "dist:portable": "npm run build && electron-builder --win portable --x64"
+    "dist:portable": "npm run build && electron-builder --win portable --x64",
+    "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
