@@ -56,10 +56,10 @@ export function validateTrade(t){
   return out;
 }
 export function parseImport(text,{source='Auto-detect',currency='USD',account='Default',dateOrder='MDY'}={}) {
-  const raw=Papa.parse(text,{skipEmptyLines:'greedy'});
+  const raw=Array.isArray(text)?{data:text,errors:[]}:Papa.parse(text,{skipEmptyLines:'greedy'});
   if(raw.errors.length)throw new Error(raw.errors[0].message);
   const headerIndex=raw.data.findIndex(row=>row.some(c=>aliases.symbol.includes(key(c)))&&row.some(c=>[...aliases.action,...aliases.quantity].includes(key(c))));
-  if(headerIndex<0)throw new Error('No supported CSV header found. Use a transaction or holdings CSV export, or download our template.');
+  if(headerIndex<0)throw new Error('No supported table header found. Use a transaction or holdings export, select another worksheet, or download our template.');
   const headers=raw.data[headerIndex].map(key);
   const positions=Object.fromEntries(Object.entries(aliases).map(([field,names])=>[field,headers.findIndex(h=>names.includes(h))]));
   let broker=source;
