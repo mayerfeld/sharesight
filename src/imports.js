@@ -6,11 +6,11 @@ const aliases = {
   action:['action','transaction','transaction type','type','activity','activity type','transaction description','transactiontype','trade type'],
   symbol:['symbol','ticker','investment code','security symbol','stock symbol','code','investment'],
   name:['name','description','security description','investment name','security name'],
-  quantity:['quantity','shares','units','number of shares','quantity shares','numberofshares'],
+  quantity:['quantity','qty','shares','units','number of shares','quantity shares','numberofshares'],
   price:['price','price per share','price $','share price','unit price','price per unit','price aud','price usd','pricepershare'],
   fees:['fees','commission','commission $','commissions','commission fees','brokerage','brokerage fees','transaction fees','brokerage $'],
-  amount:['amount','amount $','net amount','net amount $','net cash','total','total amount','proceeds','net proceeds','netamount'],
-  currency:['currency','currency code'], account:['account','account number','account name','portfolio','portfolio name'],
+  amount:['amount','amount $','net amount','net amount $','net cash','total','total amount','proceeds','net proceeds','netamount','value'],
+  currency:['currency','currency code','instrument currency'], feeCurrency:['brokerage currency'], account:['account','account number','account name','portfolio','portfolio name'],
   id:['id','transaction id','transactionid','trade id','reference number','confirmation number'], source:['source','broker']
 };
 const key=s=>String(s||'').replace(/^\uFEFF/,'').toLowerCase().replace(/[_()]/g,' ').replace(/\s+/g,' ').trim();
@@ -63,14 +63,15 @@ export function parseImport(text,{source='Auto-detect',currency='USD',account='D
   const headers=raw.data[headerIndex].map(key);
   const positions=Object.fromEntries(Object.entries(aliases).map(([field,names])=>[field,headers.findIndex(h=>names.includes(h))]));
   let broker=source;
-  if(source==='Auto-detect')broker=headers.includes('run date')?'Fidelity':headers.includes('transaction description')?'Vanguard':headers.includes('transactiondate')?'E*TRADE':headers.includes('trade date')&&headers.includes('brokerage')?'Sharesight':'CSV';
+  if(source==='Auto-detect')broker=headers.includes('run date')?'Fidelity':headers.includes('transaction description')?'Vanguard':headers.includes('transactiondate')?'E*TRADE':headers.includes('brokerage')&&(headers.includes('trade date')||headers.includes('market code'))?'Sharesight':'CSV';
   const isHoldings=positions.action<0;
   if(isHoldings && !headers.includes('cost'))throw new Error('This looks like a positions export. Import transaction history, or use our holdings template with cost and price.');
-  const rows=[],errors=[];
+  const rows=[],errors=[];let reportTotalsSkipped=0;
   for(let i=headerIndex+1;i<raw.data.length;i++){
     const cells=raw.data[i];
     if(cells.every(c=>!String(c).trim()))continue;
     const get=f=>positions[f]>=0?cells[positions[f]]:undefined;
+    if (/^(?:grand )?(?:sub)?total(?:s)?(?::)?$/i.test(String(get('symbol')||'').trim()) && !String(get('action')||'').trim() && !String(get('date')||'').trim()) {reportTotalsSkipped++;continue;}
     // Broker exports sometimes append explanatory prose; show every rejected row for review.
     try{
       if(isHoldings){
@@ -82,14 +83,17 @@ export function parseImport(text,{source='Auto-detect',currency='USD',account='D
         const feeColumns=headers.map((h,j)=>/^(fees|commission|commission \$|commissions|commission fees|brokerage|brokerage fees|brokerage \$|transaction fees|fees \$)$/.test(h)?j:-1).filter(j=>j>=0);
         const fees=feeColumns.reduce((sum,j)=>sum+Math.abs(numeric(cells[j])),0);
         const amount=Math.abs(numeric(get('amount')));
+        const tradeCurrency=String(get('currency')||currency).trim().toUpperCase();
+        const feeCurrency=String(get('feeCurrency')||tradeCurrency).trim().toUpperCase();
+        if(fees && feeCurrency!==tradeCurrency)throw new Error(`Brokerage currency ${feeCurrency} differs from instrument currency ${tradeCurrency}. Convert the brokerage fee before importing.`);
         let price=Math.abs(numeric(get('price')));
         if(!price&&quantity&&amount&&action!=='DIVIDEND')price=(action==='SELL'?amount+fees:amount-fees)/quantity;
-        rows.push(validateTrade({id:get('id'),date:parseDate(get('date'),dateOrder),action,symbol:get('symbol'),name:get('name'),quantity:action==='DIVIDEND'?0:quantity,price:action==='DIVIDEND'?0:price,fees,amount:action==='DIVIDEND'?amount:(action==='SELL'?quantity*price-fees:quantity*price+fees),currency:get('currency')||currency,account:get('account')||account,source:get('source')||broker}));
+        rows.push(validateTrade({id:get('id'),date:parseDate(get('date'),dateOrder),action,symbol:get('symbol'),name:get('name'),quantity:action==='DIVIDEND'?0:quantity,price:action==='DIVIDEND'?0:price,fees,amount:action==='DIVIDEND'?amount:(action==='SELL'?quantity*price-fees:quantity*price+fees),currency:tradeCurrency,account:get('account')||account,source:get('source')||broker}));
       }
     }catch(e){errors.push({row:i+1,message:e.message});}
   }
   if(!rows.length&&!errors.length)throw new Error('No data rows found.');
-  return {kind:isHoldings?'holdings':'trades',source:broker,rows,errors};
+  return {kind:isHoldings?'holdings':'trades',source:broker,rows,errors,...(reportTotalsSkipped?{reportTotalsSkipped}:{})};
 }
 // Count matching rows rather than collapsing all equal trades: two genuine identical fills remain two fills.
 function fingerprint(t){return JSON.stringify([t.account,t.currency,t.date,t.action,t.symbol,t.quantity,t.price,t.fees,t.amount]);}

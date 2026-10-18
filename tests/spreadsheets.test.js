@@ -73,3 +73,36 @@ test('spreadsheet errors cannot become zero-valued fees silently',async()=>{
  const [parsed]=await readImportFile(file([['Trades',sheet]]));
  assert.match(parsed.error,/Cell G2/);
 });
+
+// Synthetic Sharesight report layout. Do not include users' uploaded portfolios in fixtures.
+test('Sharesight all-trades report preserves date-formatted text, maps report headers and ignores totals',async()=>{
+ const report=[
+  ['All trades report for: Example Portfolio'],
+  [],
+  ['Code','Market Code','Name','Date','Type','Qty','Price','Instrument Currency','Cost Base Per Share (usd)','Brokerage','Brokerage Currency','Exch. Rate','Value',' '],
+  ['TEST','NASDAQ','Example company','2025-09-29','Buy',2,100,'USD','',1,'USD',1,201,''],
+  ['DEMO','NYSE','Another company','2025-10-01','Buy',3,50,'USD','',0,'USD',1,150,''],
+  ['Total','','','','','','','','','','','','','']
+ ];
+ const sheet=XLSX.utils.aoa_to_sheet(report);
+ for(const address of ['D3','D4','D5'])sheet[address].z='dd mmm yyyy';
+ const [parsed]=await readImportFile(file([['Combined',sheet]]));
+ assert.equal(parsed.input[2][3],'Date');assert.equal(parsed.input[3][3],'2025-09-29');
+ const result=parseImport(parsed.input);
+ assert.equal(result.source,'Sharesight');assert.equal(result.rows.length,2);assert.deepEqual(result.errors,[]);
+ assert.equal(result.reportTotalsSkipped,1);assert.equal(result.rows[0].date,'2025-09-29');
+ assert.equal(result.rows[0].quantity,2);assert.equal(result.rows[0].currency,'USD');assert.equal(result.rows[0].fees,1);
+ assert.deepEqual(calculateLedger(result.rows).issues,[]);
+ assert.equal(calculateLedger(result.rows).holdings.reduce((sum,h)=>sum+h.quantity*h.cost,0),351);
+ assert.equal(mergeTrades(result.rows,result.rows).added,0);
+});
+
+test('Sharesight instrument currency and brokerage currency are not silently treated as USD',async()=>{
+ const report=[['Code','Market Code','Name','Date','Type','Qty','Price','Instrument Currency','Brokerage','Brokerage Currency','Value'],['TEST','ASX','Example','2025-01-15','Buy',2,100,'AUD',1,'AUD',201]];
+ const [sheet]=await readImportFile(file([['Combined',report]]));
+ const parsed=parseImport(sheet.input);assert.equal(parsed.rows[0].currency,'AUD');
+ assert.match(calculateLedger(parsed.rows).issues[0],/AUD differs/);
+ report[1][9]='USD';
+ const [mixed]=await readImportFile(file([['Combined',report]]));
+ assert.match(parseImport(mixed.input).errors[0].message,/Brokerage currency USD differs/);
+});

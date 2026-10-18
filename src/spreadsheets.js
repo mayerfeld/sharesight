@@ -36,18 +36,22 @@ export async function readImportFile(file) {
       sheets.push({name, error: 'This sheet is too large. Keep at most 50,000 rows, 256 columns and 1,000,000 cells, or export the transaction table as CSV.'});
       continue;
     }
-    const input = XLSX.utils.sheet_to_json(sheet, {header: 1, raw: true, defval: '', blankrows: true, range: 0});
+    // Read cell values directly: sheet_to_json can turn date-formatted text into NaN,
+    // including the header 'Date' in some broker reports. Only numeric cells are serial dates.
+    const input = Array.from({length: rows}, () => Array(columns).fill(''));
     let cellError;
     for (const address of Object.keys(sheet)) {
       if (address.startsWith('!')) continue;
       const cell = sheet[address];
+      const {r, c} = XLSX.utils.decode_cell(address);
+      if (r >= rows || c >= columns) continue;
+      if (cell.v != null) input[r][c] = cell.v;
       if (cell.t === 'e' || (cell.f && cell.v == null)) {
         cellError = `Cell ${address} contains an Excel error or a formula without a saved value. Recalculate the workbook in Excel and save it before importing.`;
       }
       if (cell.t === 'n' && cell.z && XLSX.SSF.is_date(cell.z)) {
         const date = XLSX.SSF.parse_date_code(cell.v, {date1904: !!workbook.Workbook?.WBProps?.date1904});
         if (date) {
-          const {r, c} = XLSX.utils.decode_cell(address);
           input[r][c] = `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
         }
       }
