@@ -1,0 +1,49 @@
+{
+  "name": "sharesight-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local portfolio reporting for Windows",
+  "author": "Sharesight Desktop contributors",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "test": "node --test",
+    "desktop": "npm run build && electron .",
+    "dist:win": "npm run build && electron-builder --win nsis --x64",
+    "dist:portable": "npm run build && electron-builder --win portable --x64"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "papaparse": "^5.5.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "electron": "^44.9.0",
+    "electron-builder": "^26.0.0",
+    "vite": "^8.3.4"
+  },
+  "build": {
+    "appId": "local.portfolio.desktop",
+    "productName": "Portfolio Desk",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
