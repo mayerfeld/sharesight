@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: '17,47 13-22 * * 1-5'
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,6 +24,15 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm test
+      - uses: actions/cache@v4
+        with:
+          path: .market-cache
+          key: market-v1-${{ github.run_id }}
+          restore-keys: market-v1-
+      - name: Refresh public market feed
+        if: github.event_name != 'pull_request'
+        run: npm run market:refresh
+        continue-on-error: true
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
